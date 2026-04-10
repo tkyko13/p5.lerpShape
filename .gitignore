@@ -1,0 +1,10 @@
+# --- macOS / Windows のシステムファイル ---
+
+.DS_Store
+Thumbs.db
+
+# --- VS Code / エディタ関連 ---
+
+.vscode/
+.idea/
+\*.swp
