@@ -82,7 +82,7 @@ lerpString("Hello", "こんにちは", 50, 200);
 HTML で p5.js を読み込んだ後に、本ライブラリを読み込んでください。
 
 ```HTML
-<script src="[https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js](https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js)"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
 <script src="p5.lerpShape.js"></script>
 ```
 
