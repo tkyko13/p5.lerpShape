@@ -36,7 +36,7 @@ function draw() {
 }
 ```
 
-![result](mySketch.gif)
+![result](public/basic.gif)
 
 ## カスタムシェイプ (vertex)
 
@@ -65,6 +65,10 @@ lerpString("Hello", "こんにちは", 50, 200);
 });
 ```
 
+## Examples
+
+👉 **[p5.lerpShape Examples Portal](https://tkyko13.github.io/p5.lerpShape/example/)**
+
 ## 🛠 対応している関数
 
 - `line()`
@@ -83,7 +87,7 @@ HTML で p5.js を読み込んだ後に、本ライブラリを読み込んで�
 
 ```HTML
 <script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
-<script src="p5.lerpShape.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/tkyko13/p5.lerpShape/p5.lerpShape.js"></script>
 ```
 
 <!-- ## 💡 開発の裏側
