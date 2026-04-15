@@ -59,9 +59,9 @@ withLerpShape(p, () => {
 
 ```JavaScript
 withLerpShape(p, () => {
-textSize(32);
-// 「Hello」が「こんにちは」にモーフィング
-lerpString("Hello", "こんにちは", 50, 200);
+  textSize(32);
+  // 「Hello」が「こんにちは」にモーフィング
+  lerpString("Hello", "こんにちは", 50, 200);
 });
 ```
 
