@@ -10,6 +10,9 @@
     let _activeEllipseMode = 'center';
     let _shapeVertices = [];
     let _isLerpShapeMode = false;
+    let _isInsideWithLerpShape = false;
+    let _currentSteps = 0;
+    let _currentStepIndex = 0;
 
     // --- オリジナル関数の退避 (モンキーパッチ用) ---
     const _originalLine = p5.prototype.line;
@@ -34,13 +37,37 @@
      * @param {Number} progress 0.0 ~ 1.0 の数値
      * @param {Function} callback 描画関数を含む処理
      */
-    p5.prototype.withLerpShape = function (progress, callback) {
+    p5.prototype.withLerpShape = function (progress, arg2, arg3 = {}) {
+      let callback;
+      let options;
+
+      // 第2引数が関数の場合（標準的な書き方）
+      if (typeof arg2 === 'function') {
+        callback = arg2;
+        options = arg3;
+      }
+      // 第2引数がオブジェクトの場合（callback省略、optionsのみ）
+      else if (typeof arg2 === 'object' && arg2 !== null) {
+        callback = null; // またはデフォルトの空関数
+        options = arg2;
+      }
+      // それ以外（第2引数がない場合など）
+      else {
+        callback = null;
+        options = arg3;
+      }
+
       _currentLerpProgress = progress;
+      _currentSteps = options.steps || 0;
+      _currentStepIndex = 0;
+      _isInsideWithLerpShape = true;
+
       if (typeof callback === 'function') {
         this.push();
         callback();
         this.pop();
-        _currentLerpProgress = null;
+
+        this.endLerpShape();
       }
     };
 
@@ -49,7 +76,11 @@
      */
     p5.prototype.endLerpShape = function () {
       _currentLerpProgress = null;
+      _isInsideWithLerpShape = false;
     };
+
+    // p5.prototype.lerpNext = function (offset) {
+    // };
 
     // ==========================================
     // 2. モード監視 (描画基準の同期)
@@ -71,60 +102,78 @@
 
     p5.prototype.line = function (...args) {
       if (_currentLerpProgress !== null) {
-        return this.lerpLine(...args, _currentLerpProgress);
+        // 進捗計算
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
+        );
+        if (p <= 0) return;
+        if (p >= 1) return _originalLine.apply(this, args);
+
+        // 内部関数には計算済みの p を渡す
+        return this.lerpLine(...args, p);
       }
       return _originalLine.apply(this, args);
     };
 
     p5.prototype.rect = function (...args) {
       if (_currentLerpProgress !== null) {
-        // ※角丸(radius)引数は現在未対応のため最初の4つを使用
-        return this.lerpRect(
-          args[0],
-          args[1],
-          args[2],
-          args[3],
-          _currentLerpProgress,
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
         );
+        if (p <= 0) return;
+        if (p >= 1)
+          return _originalRect.call(this, args[0], args[1], args[2], args[3]);
+
+        // ※角丸(radius)引数は現在未対応のため最初の4つを使用
+        return this.lerpRect(args[0], args[1], args[2], args[3], p);
       }
       return _originalRect.apply(this, args);
     };
 
     p5.prototype.triangle = function (...args) {
       if (_currentLerpProgress !== null) {
-        return this.lerpTriangle(...args, _currentLerpProgress);
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
+        );
+        if (p <= 0) return;
+        if (p >= 1) return _originalTriangle.apply(this, args);
+        return this.lerpTriangle(...args, p);
       }
       return _originalTriangle.apply(this, args);
     };
 
     p5.prototype.ellipse = function (...args) {
       if (_currentLerpProgress !== null) {
-        return this.lerpEllipse(
-          args[0],
-          args[1],
-          args[2],
-          args[3],
-          _currentLerpProgress,
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
         );
+        if (p <= 0) return;
+        if (p >= 1) return _originalEllipse.apply(this, args);
+
+        return this.lerpEllipse(args[0], args[1], args[2], args[3], p);
       }
       return _originalEllipse.apply(this, args);
     };
 
     p5.prototype.circle = function (...args) {
       if (_currentLerpProgress !== null) {
-        return this.lerpEllipse(
-          args[0],
-          args[1],
-          args[2],
-          args[2],
-          _currentLerpProgress,
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
         );
+        if (p <= 0) return;
+        if (p >= 1) return _originalCircle.apply(this, args);
+        return this.lerpEllipse(args[0], args[1], args[2], args[2], p);
       }
       return _originalCircle.apply(this, args);
     };
 
     p5.prototype.arc = function (...args) {
       if (_currentLerpProgress !== null) {
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
+        );
+        if (p <= 0) return;
+        if (p >= 1) return _originalArc.apply(this, args);
         return this.lerpArc(
           args[0],
           args[1],
@@ -132,7 +181,7 @@
           args[3],
           args[4],
           args[5],
-          _currentLerpProgress,
+          p,
         );
       }
       return _originalArc.apply(this, args);
@@ -140,7 +189,12 @@
 
     p5.prototype.text = function (...args) {
       if (_currentLerpProgress !== null) {
-        return this.lerpText(args[0], args[1], args[2], _currentLerpProgress);
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
+        );
+        if (p <= 0) return;
+        if (p >= 1) return _originalText.apply(this, args);
+        return this.lerpText(args[0], args[1], args[2], p);
       }
       return _originalText.apply(this, args);
     };
@@ -172,7 +226,12 @@
         if (args[0] === this.CLOSE) {
           _shapeVertices.push(_shapeVertices[0]);
         }
-        this.drawLerpVertices(_shapeVertices, _currentLerpProgress);
+        const p = _calculateLocalProgress(
+          _getValidatedProgress(_currentLerpProgress),
+        );
+        if (p <= 0) return;
+        // if (p >= 1) return
+        this.lerpVertices(_shapeVertices, p);
         return;
       }
       return _originalEndShape.apply(this, args);
@@ -183,16 +242,17 @@
     // ==========================================
 
     p5.prototype.lerpLine = function (x1, y1, x2, y2, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalLine.call(this, x1, y1, x2, y2);
+
       const tx = this.lerp(x1, x2, p);
       const ty = this.lerp(y1, y2, p);
       return _originalLine.call(this, x1, y1, tx, ty);
     };
 
     p5.prototype.lerpRect = function (a, b, c, d, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalRect.call(this, a, b, c, d);
 
@@ -226,11 +286,11 @@
         { x: x, y: y + h },
         { x: x, y: y },
       ];
-      this.drawLerpVertices(vertices, p);
+      this.lerpVertices(vertices, p);
     };
 
     p5.prototype.lerpTriangle = function (x1, y1, x2, y2, x3, y3, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalTriangle.call(this, x1, y1, x2, y2, x3, y3);
 
@@ -240,11 +300,11 @@
         { x: x3, y: y3 },
         { x: x1, y: y1 },
       ];
-      this.drawLerpVertices(vertices, p);
+      this.lerpVertices(vertices, p);
     };
 
     p5.prototype.lerpEllipse = function (a, b, c, d, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalEllipse.call(this, a, b, c, d);
 
@@ -272,7 +332,7 @@
     };
 
     p5.prototype.lerpArc = function (x, y, w, h, start, end, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalArc.call(this, x, y, w, h, start, end);
 
@@ -284,7 +344,7 @@
     };
 
     p5.prototype.lerpText = function (str, x, y, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return;
       if (p >= 1) return _originalText.call(this, str, x, y);
       const strIndex = Math.floor(str.length * p);
@@ -300,7 +360,7 @@
      * @param {Number} progress 0.0 ~ 1.0
      */
     p5.prototype.lerpChar = function (startChar, endChar, x, y, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return _originalText.call(this, startChar, x, y);
       if (p >= 1) return _originalText.call(this, endChar, x, y);
 
@@ -325,7 +385,7 @@
      * @param {Number} progress 0.0 ~ 1.0
      */
     p5.prototype.lerpString = function (startStr, endStr, x, y, progress) {
-      const p = progress !== undefined ? progress : _currentLerpProgress;
+      let p = _getValidatedProgress(progress);
       if (p <= 0) return _originalText.call(this, startStr, x, y);
       if (p >= 1) return _originalText.call(this, endStr, x, y);
 
@@ -346,7 +406,10 @@
       return _originalText.call(this, result, x, y);
     };
 
-    p5.prototype.drawLerpVertices = function (vertices, p) {
+    p5.prototype.lerpVertices = function (vertices, progress) {
+      let p = _getValidatedProgress(progress);
+      if (p <= 0) return;
+
       if (vertices.length < 2 || p <= 0) return;
 
       let totalLength = 0;
@@ -382,6 +445,70 @@
         }
       }
       _originalEndShape.call(this);
+    };
+
+    /**
+     * ベクトルの配列から総延長を計算する
+     * @param {p5.Vector[]} vertices
+     * @param {boolean} isClosed - 終点と始点を結ぶかどうか（rectなどの場合）
+     * @returns {number} 総延長距離
+     */
+    const _calculateLength = (vertices, isClosed = false) => {
+      if (!vertices || vertices.length < 2) return 0;
+
+      let total = 0;
+      for (let i = 0; i < vertices.length - 1; i++) {
+        total += this.dist(
+          vertices[i].x,
+          vertices[i].y,
+          vertices[i + 1].x,
+          vertices[i + 1].y,
+        );
+      }
+
+      // 閉じている図形（rectやcloseしたbeginShape）なら最後の一辺を足す
+      if (isClosed) {
+        total += this.dist(
+          vertices[vertices.length - 1].x,
+          vertices[vertices.length - 1].y,
+          vertices[0].x,
+          vertices[0].y,
+        );
+      }
+
+      return total;
+    };
+
+    const _calculateLocalProgress = (globalP) => {
+      let p = globalP;
+
+      if (_isInsideWithLerpShape && _currentSteps !== 0) {
+        _currentStepIndex++;
+        const slotSize = 1.0 / _currentSteps;
+        const myStart = (_currentStepIndex - 1) * slotSize;
+        const myEnd = _currentStepIndex * slotSize;
+
+        // mapでローカル進捗に変換（trueでクランプ）
+        p = this.map(p, myStart, myEnd, 0, 1, true);
+
+        const EPSILON = 0.000001; // 100万分の1程度の遊び
+        if (p < EPSILON) return 0;
+        if (p > 1 - EPSILON) return 1;
+      }
+
+      return p;
+    };
+
+    const _getValidatedProgress = (progress) => {
+      // 1. 宣言の共通化（引数があればそれを、なければグローバルの進捗を使う）
+      let p = progress !== undefined ? progress : _currentLerpProgress;
+
+      // 2. クリーンアップ（閾値処理）
+      const EPSILON = 1e-9;
+      if (p < EPSILON) return 0;
+      if (p > 1 - EPSILON) return 1;
+
+      return p;
     };
   } else {
     console.error('p5.lerpShape: p5.js is not found. Please load p5.js first.');
