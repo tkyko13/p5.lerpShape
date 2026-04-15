@@ -11,7 +11,7 @@ function draw() {
   background(15, 15, 35); // 深い紺色
 
   // 0.0 ~ 1.0 を往復する進捗値を作成
-  p = (cos(frameCount * PI) + 1) / 2;
+  p = (cos((frameCount / 60) * 180) + 1) / 2;
 
   // --- 共通設定 ---
   stroke(255);
