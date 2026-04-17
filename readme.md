@@ -4,6 +4,8 @@ p5.js の標準的な図形描画を、`0.0` から `1.0` の進捗値（Progres
 
 「図形を描く過程」をアニメーションにしたい時に、複雑な計算をすることなく、既存のコードを囲むだけで動かせます。
 
+![result](public/basic.gif)
+
 ## 🚀 特徴
 
 - **既存コードへの高い親和性**: `withLerpShape()` で囲むだけで、中の `rect` や `ellipse` がアニメーション対応になります。
@@ -36,9 +38,9 @@ function draw() {
 }
 ```
 
-![result](public/basic.gif)
+![result](public/example.gif)
 
-## カスタムシェイプ (vertex)
+### カスタムシェイプ (vertex)
 
 beginShape / endShape にも対応しています。
 
@@ -53,17 +55,21 @@ withLerpShape(p, () => {
 });
 ```
 
-## 文字のモーフィング (lerpString)
+![result](public/example02.gif)
+
+### 文字 (text, lerpString)
 
 文字列から別の文字列へ、一文字ずつ変容させることができます。
 
 ```JavaScript
 withLerpShape(p, () => {
   textSize(32);
-  // 「Hello」が「こんにちは」にモーフィング
-  lerpString("Hello", "こんにちは", 50, 200);
+  // タイピング風に表示
+  text('Hello!', 50, 50);
 });
 ```
+
+![result](public/example03.gif)
 
 ## Examples
 
@@ -75,7 +81,6 @@ withLerpShape(p, () => {
 - `rect()` (角丸は現在未対応)
 - `ellipse() / circle()`
 - `triangle()`
-- `quad()`
 - `arc()`
 - `text()` (文字数が増えるアニメ)
 - `lerpString()` (独自：文字列間のモーフィング)

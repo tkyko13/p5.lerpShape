@@ -6,8 +6,6 @@
   if (typeof window.p5 !== 'undefined') {
     // --- 内部状態の管理 ---
     let _currentLerpProgress = null;
-    let _activeRectMode = 'corner';
-    let _activeEllipseMode = 'center';
     let _shapeVertices = [];
     let _isLerpShapeMode = false;
     let _isInsideWithLerpShape = false;
@@ -25,8 +23,6 @@
     const _originalBeginShape = p5.prototype.beginShape;
     const _originalVertex = p5.prototype.vertex;
     const _originalEndShape = p5.prototype.endShape;
-    const _originalRectMode = p5.prototype.rectMode;
-    const _originalEllipseMode = p5.prototype.ellipseMode;
 
     // ==========================================
     // 1. メインAPI (ユーザーが直接呼ぶ関数)
@@ -81,20 +77,6 @@
 
     // p5.prototype.lerpNext = function (offset) {
     // };
-
-    // ==========================================
-    // 2. モード監視 (描画基準の同期)
-    // ==========================================
-
-    p5.prototype.rectMode = function (mode) {
-      _activeRectMode = mode;
-      return _originalRectMode.apply(this, arguments);
-    };
-
-    p5.prototype.ellipseMode = function (mode) {
-      _activeEllipseMode = mode;
-      return _originalEllipseMode.apply(this, arguments);
-    };
 
     // ==========================================
     // 3. 基本図形のオーバーライド
@@ -257,17 +239,18 @@
       if (p >= 1) return _originalRect.call(this, a, b, c, d);
 
       let x, y, w, h;
-      if (_activeRectMode === this.CORNERS) {
+      const currentRectMode = this._renderer.states.rectMode; //
+      if (currentRectMode === this.CORNERS) {
         x = this.min(a, c);
         y = this.min(b, d);
         w = this.abs(c - a);
         h = this.abs(d - b);
-      } else if (_activeRectMode === this.RADIUS) {
+      } else if (currentRectMode === this.RADIUS) {
         x = a - c;
         y = b - d;
         w = c * 2;
         h = d * 2;
-      } else if (_activeRectMode === this.CENTER) {
+      } else if (currentRectMode === this.CENTER) {
         x = a - c / 2;
         y = b - d / 2;
         w = c;
@@ -310,24 +293,25 @@
 
       const angle =
         this.angleMode() === this.DEGREES ? 360 * p : this.TWO_PI * p;
-      const mode = _activeEllipseMode;
+
       let x = a,
         y = b,
         w = c,
         h = d;
-
-      if (mode === this.CORNER) {
-        x = a + c / 2;
-        y = b + d / 2; // arcは常に中心基準なのでずらす
-      } else if (mode === this.CORNERS) {
-        x = (a + c) / 2;
-        y = (b + d) / 2;
-        w = this.abs(c - a);
-        h = this.abs(d - b);
-      } else if (mode === this.RADIUS) {
-        w = c * 2;
-        h = d * 2;
-      }
+      // const mode = _activeEllipseMode;
+      // arcもellipseModeに影響されるためなし
+      // if (mode === this.CORNER) {
+      //   x = a + c / 4;
+      //   y = b + d / 4; // arcは常に中心基準なのでずらす
+      // } else if (mode === this.CORNERS) {
+      //   x = (a + c) / 2;
+      //   y = (b + d) / 2;
+      //   w = this.abs(c - a);
+      //   h = this.abs(d - b);
+      // } else if (mode === this.RADIUS) {
+      //   w = c * 2;
+      //   h = d * 2;
+      // }
       return _originalArc.call(this, x, y, w, h, 0, angle);
     };
 

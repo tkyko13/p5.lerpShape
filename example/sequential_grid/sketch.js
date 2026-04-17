@@ -5,10 +5,11 @@ function setup() {
   createCanvas(400, 400);
   noFill();
   stroke(0);
+  rectMode(CENTER);
 }
 
 function draw() {
-  background(255);
+  background(220);
 
   // 0から1を往復させる
   t += sp;
@@ -27,9 +28,9 @@ function draw() {
           let x = i * gap + gap / 2;
           let y = j * gap + gap / 2;
 
-          // 普通の ellipse を呼ぶだけで、
           // 内部で steps に基づいて順番に描画される
-          ellipse(x, y, 30, 30);
+          if ((i + j) % 2 == 0) ellipse(x, y, 30, 30);
+          else rect(x, y, 30, 30);
         }
       }
     },
