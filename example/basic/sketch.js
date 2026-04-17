@@ -4,14 +4,14 @@ function setup() {
   createCanvas(600, 400);
   angleMode(DEGREES); // 度数法でも動く
 
-  // saveGif('basic-all', 2);
+  // saveGif('basic', 4);
 }
 
 function draw() {
   background(15, 15, 35);
 
   // 0.0 ~ 1.0 を往復する進捗値を作成
-  p = (cos((frameCount / 60) * 180) + 1) / 2;
+  p = (cos((frameCount / 120) * 180) + 1) / 2;
 
   stroke(255);
   strokeWeight(2);
@@ -24,22 +24,47 @@ function draw() {
     rectMode(CENTER);
     rect(100, 100, 80, 80);
     // 円 (ellipse)
-    ellipse(300, 100, 80, 80);
+    ellipse(230, 100, 80, 80);
     // 三角形
-    triangle(500, 60, 540, 140, 460, 140);
+    triangle(350, 60, 300, 140, 400, 140);
+    // beginShape / vertex
+    beginShape();
+    vertex(440, 50);
+    vertex(500, 50);
+    vertex(500, 100);
+    vertex(550, 100);
+    vertex(550, 140);
+    vertex(440, 140);
+    endShape(CLOSE);
   });
 
-  // 2. カスタム形状 (beginShape / vertex)
+  // 2. Sequential
   // endLerpShape
-  withLerpShape(p);
+  // const n = 5;
+  // withLerpShape(p, { steps: n });
+  // push();
+  // rectMode(CORNER);
+  // fill(237, 34, 93, p * 255);
+  // stroke(255, 255 - p * 255);
+  // translate(100, 270);
+  // rotate(270);
+  // for (let i = 0; i < n; i++) {
+  //   rect(0, -10, 50, 20);
+  //   rotate(360 / n);
+  // }
+  // pop();
+  // endLerpShape();
+
+  const n = 6;
+  withLerpShape(p, { steps: n });
+  push();
+  translate(100, 230);
   stroke(100, 200, 255);
-  beginShape();
-  vertex(50, 250);
-  vertex(150, 220);
-  vertex(180, 300);
-  vertex(100, 350);
-  vertex(20, 320);
-  endShape(CLOSE);
+  rectMode(CENTER);
+  for (let i = n - 1; i >= 0; i--) {
+    rect(0, i * 20, 10 + i * 20, 10);
+  }
+  pop();
   endLerpShape();
 
   // 3. 文字
@@ -59,15 +84,5 @@ function draw() {
   stroke(255, 100, 100);
   lerpLine(300, 330, 530, 330, p);
 
-  // 4. 進捗バー（おまけ）
-  drawProgressBar(p);
-}
-
-function drawProgressBar(progress) {
-  noStroke();
-  fill(50);
-  rectMode(CORNER);
-  rect(0, height - 5, width, 5);
-  fill(0, 255, 150);
-  rect(0, height - 5, width * progress, 5);
+  // 4.
 }
