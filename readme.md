@@ -57,9 +57,9 @@ withLerpShape(p, () => {
 
 ![result](public/example02.gif)
 
-### 文字 (text, lerpString)
+### 文字 (text)
 
-文字列から別の文字列へ、一文字ずつ変容させることができます。
+タイプライターのようなアニメーションが表現できます。
 
 ```JavaScript
 withLerpShape(p, () => {

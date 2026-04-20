@@ -39,7 +39,10 @@ function draw() {
   stroke(0);
 
   for (let i = 0; i < progresses.length; i++) {
-    progresses[i] += sp;
+    if (progresses[i] < 1) {
+      progresses[i] += sp;
+      break; // 順番づつ描画する場合は、これを有効にしてください。
+    }
   }
 
   typedStrokes.forEach((stroke, i) => {
