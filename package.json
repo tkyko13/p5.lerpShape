@@ -1,0 +1,32 @@
+{
+  "name": "p5.lerpshape",
+  "version": "1.0.1",
+  "description": "Progress-based shape interpolation for p5.js",
+  "main": "p5.lerpShape.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkyko13/p5.lerpShape.git"
+  },
+  "keywords": [
+    "p5js",
+    "p5.js",
+    "p5-library",
+    "lerp",
+    "interpolation",
+    "morphing",
+    "animation",
+    "generative-art",
+    "creative-coding",
+    "drawing-process",
+    "sequential-animation"
+  ],
+  "author": "tkyko13",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tkyko13/p5.lerpShape/issues"
+  },
+  "homepage": "https://github.com/tkyko13/p5.lerpShape#readme",
+  "dependencies": {
+    "p5.lerpshape": "^1.0.1"
+  }
+}

@@ -8,6 +8,7 @@
     let _currentLerpProgress = null;
     let _shapeVertices = [];
     let _isLerpShapeMode = false;
+    let _beginShapeArgs = [];
     let _isInsideWithLerpShape = false;
     let _currentSteps = 0;
     let _currentStepIndex = 0;
@@ -189,8 +190,10 @@
       if (_currentLerpProgress !== null) {
         _isLerpShapeMode = true;
         _shapeVertices = [];
+        _beginShapeArgs = args;
         return;
       }
+
       return _originalBeginShape.apply(this, args);
     };
 
@@ -214,6 +217,7 @@
         if (p <= 0) return;
         // if (p >= 1) return
         this.lerpVertices(_shapeVertices, p);
+        _beginShapeArgs = null;
         return;
       }
       return _originalEndShape.apply(this, args);
@@ -390,21 +394,47 @@
       return _originalText.call(this, result, x, y);
     };
 
+    /**
+     * 頂点配列の間を進捗(0.0〜1.0)に応じて補間し、線を描画します。
+     * [x, y]形式の配列、または{x, y}形式のオブジェクトの両方に対応しています。
+     * * @param {Array<Object|Array>} vertices - 補間する頂点の配列。
+     * 例: [{x: 0, y: 0}, {x: 100, y: 100}] または [[0, 0], [100, 100]]
+     * @param {number} progress - 描画の進捗度 (0.0 から 1.0)。
+     * * @throws {Error} 頂点データが不正な場合（配列の長さ不足やプロパティの欠如）にエラーを投げます。
+     * * @example
+     * const points = [[10, 10], [50, 80], [100, 10]];
+     * lerpVertices(points, frameCount * 0.01);
+     */
     p5.prototype.lerpVertices = function (vertices, progress) {
       let p = _getValidatedProgress(progress);
-      if (p <= 0) return;
-
       if (vertices.length < 2 || p <= 0) return;
+
+      const getXY = (v, i) => {
+        if (Array.isArray(v)) {
+          if (v.length < 2) {
+            throw new Error(
+              `[p5.lerpShape] Vertex array at index ${i} must have at least 2 elements [x, y].`,
+            );
+          }
+          return { x: v[0], y: v[1] };
+          // return { x: v[0], y: v[1], z: v[2] || 0 };
+        }
+        if (!v || (v.x === undefined && v.y === undefined)) {
+          throw new Error(
+            `[p5.lerpShape] Invalid vertex data at index ${index}: expected {x, y} or [x, y], but got ${v}`,
+          );
+        }
+        return v || { x: 0, y: 0 };
+        // return { x: v.x, y: v.y, z: v.z || 0 };
+      };
 
       let totalLength = 0;
       let distances = [];
       for (let i = 0; i < vertices.length - 1; i++) {
-        let d = this.dist(
-          vertices[i].x,
-          vertices[i].y,
-          vertices[i + 1].x,
-          vertices[i + 1].y,
-        );
+        let v1 = getXY(vertices[i]);
+        let v2 = getXY(vertices[i + 1]);
+
+        let d = this.dist(v1.x, v1.y, v2.x, v2.y);
         distances.push(d);
         totalLength += d;
       }
@@ -412,22 +442,35 @@
       let targetLength = totalLength * p;
       let currentAccumulated = 0;
 
+      // _originalBeginShape.call(this, ...(_beginShapeArgs || []));
       _originalBeginShape.call(this);
-      _originalVertex.call(this, vertices[0].x, vertices[0].y);
+
+      let firstV = getXY(vertices[0]);
+      _originalVertex.call(this, firstV.x, firstV.y);
 
       for (let i = 0; i < vertices.length - 1; i++) {
         let d = distances[i];
+        let vStart = getXY(vertices[i]);
+        let vEnd = getXY(vertices[i + 1]);
+
         if (currentAccumulated + d <= targetLength) {
-          _originalVertex.call(this, vertices[i + 1].x, vertices[i + 1].y);
+          _originalVertex.call(this, vEnd.x, vEnd.y);
           currentAccumulated += d;
         } else {
           let localP = (targetLength - currentAccumulated) / d;
-          let tx = this.lerp(vertices[i].x, vertices[i + 1].x, localP);
-          let ty = this.lerp(vertices[i].y, vertices[i + 1].y, localP);
+          let tx = this.lerp(vStart.x, vEnd.x, localP);
+          let ty = this.lerp(vStart.y, vEnd.y, localP);
           _originalVertex.call(this, tx, ty);
           break;
         }
       }
+
+      // いったん todo
+      // try {
+      //   _originalEndShape.call(this);
+      // } catch (e) {
+      //   console.log(e);
+      // }
       _originalEndShape.call(this);
     };
 
