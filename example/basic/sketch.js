@@ -17,18 +17,6 @@ function draw() {
   strokeWeight(2);
   noFill();
 
-  const bs = [
-    undefined,
-    POINTS,
-    LINES,
-    TRIANGLES,
-    TRIANGLE_FAN,
-    TRIANGLE_STRIP,
-    QUADS,
-    QUAD_STRIP,
-    // TESS, //webgl only
-  ];
-
   // 1. 基本的な図形
   // withLerpShapeのcallback
   withLerpShape(p, () => {
@@ -40,34 +28,15 @@ function draw() {
     // 三角形
     triangle(350, 60, 300, 140, 400, 140);
     // beginShape / vertex
-    beginShape(bs[1]);
+    beginShape();
     vertex(440, 50);
-    vertex(500, 30);
+    vertex(500, 50);
     vertex(500, 100);
     vertex(550, 100);
     vertex(550, 140);
-    vertex(400, 140);
+    vertex(440, 140);
     endShape(CLOSE);
   });
-
-  // beginShape(bs[0]);
-  // vertex(440, 50);
-  // vertex(500, 50);
-  // vertex(500, 100);
-  // vertex(550, 100);
-  // vertex(550, 140);
-  // vertex(440, 140);
-
-  // beginShape(bs[2]);
-  // vertex(100, 100);
-  // vertex(100, 200);
-  // vertex(200, 100);
-  // vertex(200, 200);
-
-  // endShape();
-  // // try {
-  // endShape(CLOSE);
-  // // } catch (e) {}
 
   // 2. Sequential
   // endLerpShape
