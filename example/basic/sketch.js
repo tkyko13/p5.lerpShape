@@ -40,7 +40,7 @@ function draw() {
     // 三角形
     triangle(350, 60, 300, 140, 400, 140);
     // beginShape / vertex
-    beginShape(bs[7]);
+    beginShape(bs[1]);
     vertex(440, 50);
     vertex(500, 30);
     vertex(500, 100);
