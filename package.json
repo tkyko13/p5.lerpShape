@@ -1,6 +1,6 @@
 {
   "name": "p5.lerpshape",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Progress-based shape interpolation for p5.js",
   "main": "p5.lerpShape.js",
   "repository": {
