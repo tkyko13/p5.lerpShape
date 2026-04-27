@@ -284,7 +284,7 @@
       if (p >= 1) return _originalRect.call(this, a, b, c, d);
 
       let x, y, w, h;
-      const currentRectMode = this._renderer.states.rectMode; //
+      const currentRectMode = _getCurrentRectMode(this);
       if (currentRectMode === this.CORNERS) {
         x = this.min(a, c);
         y = this.min(b, d);
@@ -576,6 +576,17 @@
       if (p > 1 - EPSILON) return 1;
 
       return p;
+    };
+
+    const _getCurrentRectMode = (p5Instance) => {
+      const currentRectMode = p5Instance._renderer.states === undefined ? p5Instance._renderer._rectMode : p5Instance._renderer.states.rectMode;
+      //const currentRectMode = this._renderer._rectMode; // 1系の場合
+      //const currentRectMode = this._renderer.states.rectMode; // 2系の場合
+      if (currentRectMode === undefined) {
+        console.warn('p5.lerpShape: Unable to determine current rectMode. Defaulting to CORNER. Please ensure you are using a compatible version of p5.js.');
+        return p5Instance.CORNER;
+      }
+      return currentRectMode;
     };
   } else {
     console.error('p5.lerpShape: p5.js is not found. Please load p5.js first.');
