@@ -34,6 +34,10 @@
      * 指定した進捗度でコールバック内の図形を描画する
      * @param {Number} progress 0.0 ~ 1.0 の数値
      * @param {Function} callback 描画関数を含む処理
+     * * * @options
+     * - reverse {boolean} (defalut: false) : 描画アニメーションを反転させるかどうか
+     * - fixAngle {boolean} (default: true) : 楕円のarc描画時に幾何学的に正確な角度へ補正するかどうか
+     * - steps {number} (default: 1) : 描画を分割するステップ数
      */
     p5.prototype.withLerpShape = function (progress, arg2, arg3 = {}) {
       let callback;
@@ -63,6 +67,7 @@
       _prevOptions = _currentOptions;
       _currentOptions = {
         reverse: options.reverse || false,
+        fixAngle: options.fixAngle ?? true,
       };
 
       // stepsの設定は別途
@@ -346,32 +351,26 @@
       this.lerpVertices(vertices, p);
     };
 
-    p5.prototype.lerpEllipse = function (a, b, c, d, progress, options = {}) {
+    p5.prototype.lerpEllipse = function (x, y, w, h, progress, options = {}) {
       let p = _getValidatedProgress(progress);
       if (p <= 0) return;
-      if (p >= 1) return _originalEllipse.call(this, a, b, c, d);
+      if (p >= 1) return _originalEllipse.call(this, x, y, w, h);
 
-      const angle =
-        this.angleMode() === this.DEGREES ? 360 * p : this.TWO_PI * p;
+      // モードから円の幅と高さ計算
+      let ew = w;
+      let eh = h;
+      if (_getCurrentEllipseMode(this) == CORNERS) {
+        ew = w - x;
+        eh = h - y;
+      }
 
-      let x = a,
-        y = b,
-        w = c,
-        h = d;
-      // const mode = _activeEllipseMode;
-      // arcもellipseModeに影響されるためなし
-      // if (mode === this.CORNER) {
-      //   x = a + c / 4;
-      //   y = b + d / 4; // arcは常に中心基準なのでずらす
-      // } else if (mode === this.CORNERS) {
-      //   x = (a + c) / 2;
-      //   y = (b + d) / 2;
-      //   w = this.abs(c - a);
-      //   h = this.abs(d - b);
-      // } else if (mode === this.RADIUS) {
-      //   w = c * 2;
-      //   h = d * 2;
-      // }
+      let currentAngle = p * _p5PI() * 2;
+
+      // arc用の角度を算出
+      if (options.fixAngle) {
+        currentAngle = _toArcFixAngle(currentAngle, ew, eh);
+      }
+
       if (options.reverse) {
         return _originalArc.call(
           this,
@@ -379,11 +378,11 @@
           y,
           w,
           h,
-          (this.angleMode() === this.DEGREES ? 360 : this.TWO_PI) - angle,
+          _p5PI() * 2 - currentAngle,
           0,
         );
       }
-      return _originalArc.call(this, x, y, w, h, 0, angle);
+      return _originalArc.call(this, x, y, w, h, 0, currentAngle);
     };
 
     p5.prototype.lerpArc = function (
@@ -400,12 +399,30 @@
       if (p <= 0) return;
       if (p >= 1) return _originalArc.call(this, x, y, w, h, start, end);
 
-      let s = start,
-        e = end;
-      if (s > e) s -= this.angleMode() === this.DEGREES ? 360 : this.TWO_PI;
-      const currentAngle = this.lerp(s, e, p);
+      // モードから曲線の幅と高さ計算
+      let aw = w;
+      let ah = h;
+      if (_getCurrentEllipseMode(this) == CORNERS) {
+        aw = w - x;
+        ah = h - y;
+      }
+
+      let s = start;
+      let e = end;
+      if (s > e) s -= _p5PI() * 2;
+      let currentAngle = this.lerp(s, e, p);
       if (options.reverse) {
-        return _originalArc.call(this, x, y, w, h, this.lerp(e, s, p), e);
+        currentAngle = this.lerp(e, s, p);
+      }
+
+      if (options.fixAngle) {
+        currentAngle = _toArcFixAngle(currentAngle, aw, ah);
+        s = _toArcFixAngle(s, aw, ah);
+        e = _toArcFixAngle(e, aw, ah);
+      }
+
+      if (options.reverse) {
+        return _originalArc.call(this, x, y, w, h, currentAngle, e);
       }
       return _originalArc.call(this, x, y, w, h, s, currentAngle);
     };
@@ -579,15 +596,58 @@
     };
 
     const _getCurrentRectMode = (p5Instance) => {
-      const currentRectMode = p5Instance._renderer.states === undefined ? p5Instance._renderer._rectMode : p5Instance._renderer.states.rectMode;
+      const currentRectMode =
+        p5Instance._renderer.states === undefined
+          ? p5Instance._renderer._rectMode
+          : p5Instance._renderer.states.rectMode;
       //const currentRectMode = this._renderer._rectMode; // 1系の場合
       //const currentRectMode = this._renderer.states.rectMode; // 2系の場合
       if (currentRectMode === undefined) {
-        console.warn('p5.lerpShape: Unable to determine current rectMode. Defaulting to CORNER. Please ensure you are using a compatible version of p5.js.');
+        console.warn(
+          'p5.lerpShape: Unable to determine current rectMode. Defaulting to CORNER. Please ensure you are using a compatible version of p5.js.',
+        );
         return p5Instance.CORNER;
       }
       return currentRectMode;
     };
+
+    const _getCurrentEllipseMode = (p5Instance) => {
+      const currentEllipseMode =
+        p5Instance._renderer.states === undefined
+          ? p5Instance._renderer._ellipseMode
+          : p5Instance._renderer.states.ellipseMode;
+      //const currentEllipseMode = this._renderer._ellipseMode; // 1系の場合
+      //const currentEllipseMode = this._renderer.states._ellipseMode; // 2系の場合
+      if (currentEllipseMode === undefined) {
+        console.warn(
+          'p5.lerpShape: Unable to determine current ellipseMode. Defaulting to CENTER. Please ensure you are using a compatible version of p5.js.',
+        );
+        return p5Instance.CENTER;
+      }
+      return currentEllipseMode;
+    };
+
+    // arcで描画するための角度を算出
+    const _toArcFixAngle = (rad, w, h) => {
+      return atan2(h * sin(rad), w * cos(rad));
+    };
+
+    // degrees、radians気にせずに、扱えるように
+    const _p5PI = () => {
+      return angleMode() === DEGREES ? 180 : PI;
+    };
+
+    // const _toP5Angle = (p5Instance, rad) => {
+    //   return p5Instance.angleMode() === p5Instance.DEGREES
+    //     ? p5Instance.degrees(rad)
+    //     : rad;
+    // };
+
+    // const _toRadians = (p5Instance, p5Angle) => {
+    //   return p5Instance.angleMode() === p5Instance.DEGREES
+    //     ? p5Instance.radians(p5Angle)
+    //     : p5Angle;
+    // };
   } else {
     console.error('p5.lerpShape: p5.js is not found. Please load p5.js first.');
   }
