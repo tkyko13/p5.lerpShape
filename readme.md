@@ -78,7 +78,7 @@ withLerpShape(p, () => {
 ## 🛠 対応している関数
 
 - `line()`
-- `rect()` (角丸は現在未対応)
+- `rect()`
 - `ellipse() / circle()`
 - `triangle()`
 - `arc()`
