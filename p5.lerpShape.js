@@ -122,18 +122,10 @@
           _getValidatedProgress(_currentLerpProgress),
         );
         if (p <= 0) return;
-        if (p >= 1)
-          return _originalRect.call(this, args[0], args[1], args[2], args[3]);
+        if (p >= 1) return _originalRect.apply(this, args);
 
         // ※角丸(radius)引数は現在未対応のため最初の4つを使用
-        return this.lerpRect(
-          args[0],
-          args[1],
-          args[2],
-          args[3],
-          p,
-          _currentOptions,
-        );
+        return this.lerpRect(...args, p, _currentOptions);
       }
       return _originalRect.apply(this, args);
     };
@@ -283,11 +275,32 @@
       return _originalLine.call(this, x1, y1, tx, ty);
     };
 
-    p5.prototype.lerpRect = function (a, b, c, d, progress, options = {}) {
+    p5.prototype.lerpRect = function (...args) {
+      const options =
+        typeof args[args.length - 1] === 'object' ? args.pop() : {};
+
+      // 必須の引数の数判定
+      if (args.length < 4) {
+        console.error(
+          'p5.lerpRect: Too few arguments. lerpRect() requires at least 4 parameters (x, y, s, p) to draw a square, but received `${args.length}`.',
+        );
+        return;
+      }
+
+      const progress = args.pop();
+      const rectArgs = args;
       let p = _getValidatedProgress(progress);
       if (p <= 0) return;
-      if (p >= 1) return _originalRect.call(this, a, b, c, d);
+      if (p >= 1) return _originalRect.apply(this, rectArgs);
 
+      const a = rectArgs[0];
+      const b = rectArgs[1];
+      const c = rectArgs[2];
+      const d = rectArgs[3] || c;
+      const tl = rectArgs[4] || 0;
+      const tr = rectArgs[5] || tl;
+      const bl = rectArgs[6] || tr;
+      const br = rectArgs[7] || bl;
       let x, y, w, h;
       const currentRectMode = _getCurrentRectMode(this);
       if (currentRectMode === this.CORNERS) {
@@ -312,13 +325,7 @@
         h = d;
       }
 
-      const vertices = [
-        { x: x, y: y },
-        { x: x + w, y: y },
-        { x: x + w, y: y + h },
-        { x: x, y: y + h },
-        { x: x, y: y },
-      ];
+      let vertices = _getRectVertices(x, y, w, h, tl, tr, br, bl);
       if (options.reverse) {
         vertices.reverse();
       }
@@ -635,6 +642,74 @@
     // degrees、radians気にせずに、扱えるように
     const _p5PI = () => {
       return angleMode() === DEGREES ? 180 : PI;
+    };
+
+    // 角丸矩形の頂点リストを生成する
+    const _getRectVertices = (x, y, w, h, tl, tr, br, bl) => {
+      // 角丸なし
+      if (tl == 0 && tr == 0 && br == 0 && bl == 0) {
+        return [
+          { x: x, y: y },
+          { x: x + w, y: y },
+          { x: x + w, y: y + h },
+          { x: x, y: y + h },
+          { x: x, y: y },
+        ];
+      }
+
+      let vertices = [];
+
+      // 各角の半径が幅/高さの半分を超えないように制限（p5の仕様）
+      const maxR = min(w, h) / 2;
+      tl = min(tl, maxR);
+      tr = min(tr, maxR);
+      br = min(br, maxR);
+      bl = min(bl, maxR);
+
+      // 分割数（多いほど滑らか）の計算
+      // それぞれの角の値の大きさによって解像度を変化
+      // いったん固定のアルゴリズム
+      const _getDetail = (val) => int(val / 10) + 2;
+
+      // 左上角 (Top-Left)
+      const tlDetail = _getDetail(tl);
+      for (let i = 0; i <= tlDetail; i++) {
+        let angle = map(i, 0, tlDetail, PI, PI + HALF_PI);
+        vertices.push({
+          x: x + tl + cos(angle) * tl,
+          y: y + tl + sin(angle) * tl,
+        });
+      }
+      // 右上角 (Top-Right)
+      const trDetail = _getDetail(tr);
+      for (let i = 0; i <= trDetail; i++) {
+        let angle = map(i, 0, trDetail, PI + HALF_PI, TWO_PI);
+        vertices.push({
+          x: x + w - tr + cos(angle) * tr,
+          y: y + tr + sin(angle) * tr,
+        });
+      }
+      // 右下
+      const brDetail = _getDetail(br);
+      for (let i = 0; i <= brDetail; i++) {
+        let angle = map(i, 0, brDetail, 0, HALF_PI);
+        vertices.push({
+          x: x + w - br + cos(angle) * br,
+          y: y + h - br + sin(angle) * br,
+        });
+      }
+      // 左下
+      const blDetail = _getDetail(bl);
+      for (let i = 0; i <= blDetail; i++) {
+        let angle = map(i, 0, blDetail, HALF_PI, PI);
+        vertices.push({
+          x: x + bl + cos(angle) * bl,
+          y: y + h - bl + sin(angle) * bl,
+        });
+      }
+      vertices.push(vertices[0]);
+
+      return vertices;
     };
 
     // const _toP5Angle = (p5Instance, rad) => {
