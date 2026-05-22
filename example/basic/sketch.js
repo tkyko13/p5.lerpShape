@@ -8,14 +8,49 @@ function setup() {
 }
 
 function draw() {
-  background(15, 15, 35);
+  background(230, 230, 230);
 
   // 0.0 ~ 1.0 を往復する進捗値を作成
   p = (cos((frameCount / 120) * 180) + 1) / 2;
 
-  stroke(255);
-  strokeWeight(2);
+  stroke(0);
+  strokeWeight(3);
   noFill();
+
+  const pts = [50, 20, 10, 50, 30, 100, 150, 120];
+
+  stroke(0, 50);
+  beginShape();
+  vertex(pts[0], pts[1]);
+  // bezierVertex(pts[0], pts[1]);
+  bezierVertex(pts[2], pts[3]);
+  bezierVertex(pts[4], pts[5]);
+  bezierVertex(pts[6], pts[7]);
+  // bezierVertex(pts[2], pts[3], pts[4], pts[5], pts[6], pts[7]);
+  endShape();
+  stroke(0, 50);
+  // bezier(...pts);
+
+  stroke(0);
+  // lerpBezier(...pts, p);
+  withLerpShape(p, () => {
+    beginShape();
+    vertex(pts[0], pts[1]);
+    // bezierVertex(pts[0], pts[1]);
+    bezierVertex(pts[2], pts[3]);
+    bezierVertex(pts[4], pts[5]);
+    bezierVertex(pts[6], pts[7]);
+    // bezierVertex(pts[2], pts[3], pts[4], pts[5], pts[6], pts[7]);
+    endShape();
+  });
+
+  strokeWeight(10);
+  stroke(255, 0, 0);
+  for (let i = 0; i < pts.length; i += 2) {
+    point(pts[i], pts[i + 1]);
+  }
+
+  return;
 
   // 1. 基本的な図形
   // withLerpShapeのcallback

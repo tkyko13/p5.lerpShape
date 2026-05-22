@@ -7,6 +7,7 @@
     // --- 内部状態の管理 ---
     let _currentLerpProgress = null;
     let _shapeVertices = [];
+    let _bezierChain = [];
     let _isLerpShapeMode = false;
     let _isInsideWithLerpShape = false;
     let _currentSteps = 0;
@@ -24,7 +25,9 @@
     const _originalText = p5.prototype.text;
     const _originalBeginShape = p5.prototype.beginShape;
     const _originalVertex = p5.prototype.vertex;
+    const _originalBezierVertex = p5.prototype.bezierVertex;
     const _originalEndShape = p5.prototype.endShape;
+    const _originalBezier = p5.prototype.bezier;
 
     // ==========================================
     // 1. メインAPI (ユーザーが直接呼ぶ関数)
@@ -222,6 +225,7 @@
       if (_currentLerpProgress !== null) {
         _isLerpShapeMode = true;
         _shapeVertices = [];
+        _bezierChain = [];
         return;
       }
       return _originalBeginShape.apply(this, args);
@@ -233,6 +237,63 @@
         return;
       }
       return _originalVertex.apply(this, args);
+    };
+
+    p5.prototype.bezierVertex = function (...args) {
+      if (_isLerpShapeMode) {
+        // v2.0 仕様
+        if (args.length === 2) {
+          // もし、直前の頂点（始点）がまだプールにない場合、
+          // 既存の _shapeVertices の最後の点を始点として最初に入れておく
+          if (_bezierChain.length === 0) {
+            if (_shapeVertices.length > 0) {
+              _bezierChain.push({
+                ..._shapeVertices[_shapeVertices.length - 1],
+              });
+            } else {
+              _bezierChain.push({ x: 0, y: 0 }); // フォールバック
+            }
+          }
+
+          // 今回の座標 (x, y) をプールに追加
+          _bezierChain.push({ x: args[0], y: args[1] });
+
+          // 「始点、制御点1、制御点2、終点」の4点が揃ったら、1本のベジェ曲線として処理！
+          if (_bezierChain.length === 4) {
+            const [p1, p2, p3, p4] = _bezierChain;
+
+            // 20分割などで細かく刻んで、通常の頂点として登録
+            const detail = 20;
+            for (let i = 1; i <= detail; i++) {
+              let t = i / detail;
+              let cx = p5.prototype.bezierPoint(p1.x, p2.x, p3.x, p4.x, t);
+              let cy = p5.prototype.bezierPoint(p1.y, p2.y, p3.y, p4.y, t);
+              _shapeVertices.push({ x: cx, y: cy });
+            }
+
+            // 次の曲線へ数珠繋ぎにするため、
+            // 今回の「終点（p4）」だけを残してプールをリセットする
+            _bezierChain = [p4];
+          }
+        }
+        // v1.0仕様：引数が6つの場合（一発指定）
+        else if (args.length === 6) {
+          if (_shapeVertices.length === 0) _shapeVertices.push({ x: 0, y: 0 });
+          const p1 = _shapeVertices[_shapeVertices.length - 1];
+          const [x2, y2, x3, y3, x4, y4] = args;
+
+          const detail = 20;
+          for (let i = 1; i <= detail; i++) {
+            let t = i / detail;
+            let cx = p5.prototype.bezierPoint(p1.x, x2, x3, x4, t);
+            let cy = p5.prototype.bezierPoint(p1.y, y2, y3, y4, t);
+            _shapeVertices.push({ x: cx, y: cy });
+          }
+
+          _bezierChain = [];
+        }
+      }
+      return _originalBezierVertex.apply(this, args);
     };
 
     p5.prototype.endShape = function (...args) {
@@ -536,6 +597,38 @@
         }
       }
       _originalEndShape.call(this);
+    };
+
+    p5.prototype.lerpBezier = function (
+      x1,
+      y1,
+      x2,
+      y2,
+      x3,
+      y3,
+      x4,
+      y4,
+      progress,
+      options = {},
+    ) {
+      let p = _getValidatedProgress(progress);
+      if (p <= 0) return;
+      if (p >= 1)
+        return _originalBezier.call(this, x1, y1, x2, y2, x3, y3, x4, y4);
+
+      // todo optionsの設定によって変化させたい
+      let detail = 20;
+
+      // 点の配列を生成
+      let vertices = [];
+      for (let i = 0; i <= detail; i++) {
+        let t = i / detail;
+        let cx = this.bezierPoint(x1, x2, x3, x4, t);
+        let cy = this.bezierPoint(y1, y2, y3, y4, t);
+        vertices.push({ x: cx, y: cy });
+      }
+
+      this.lerpVertices(vertices, p);
     };
 
     /**
