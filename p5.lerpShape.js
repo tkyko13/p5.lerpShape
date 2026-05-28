@@ -6,8 +6,10 @@
   if (typeof window.p5 !== 'undefined') {
     // --- 内部状態の管理 ---
     let _currentLerpProgress = null;
+    let _shapeCommands = [];
     let _shapeVertices = [];
     let _bezierChain = [];
+    let _curveChain = [];
     let _isLerpShapeMode = false;
     let _isInsideWithLerpShape = false;
     let _currentSteps = 0;
@@ -26,8 +28,13 @@
     const _originalBeginShape = p5.prototype.beginShape;
     const _originalVertex = p5.prototype.vertex;
     const _originalBezierVertex = p5.prototype.bezierVertex;
+    const _originalCurveVertex = p5.prototype.curveVertex;
     const _originalEndShape = p5.prototype.endShape;
     const _originalBezier = p5.prototype.bezier;
+    const _originalCurve = p5.prototype.curve; // v1.x
+
+    //
+    const CURVE_DETAIL_DEFAULT = 20;
 
     // ==========================================
     // 1. メインAPI (ユーザーが直接呼ぶ関数)
@@ -71,6 +78,7 @@
       _currentOptions = {
         reverse: options.reverse || false,
         fixAngle: options.fixAngle ?? true,
+        detail: options.detail || CURVE_DETAIL_DEFAULT,
       };
 
       // stepsの設定は別途
@@ -224,8 +232,10 @@
     p5.prototype.beginShape = function (...args) {
       if (_currentLerpProgress !== null) {
         _isLerpShapeMode = true;
+        _shapeCommands = [];
         _shapeVertices = [];
         _bezierChain = [];
+        _curveChain = [];
         return;
       }
       return _originalBeginShape.apply(this, args);
@@ -233,7 +243,11 @@
 
     p5.prototype.vertex = function (...args) {
       if (_isLerpShapeMode) {
-        _shapeVertices.push({ x: args[0], y: args[1] });
+        // _shapeVertices.push({ x: args[0], y: args[1] });
+        // もっと多い引数にも対応しちゃうバージョン
+        for (let i = 1; i < args.length; i += 2) {
+          _shapeCommands.push({ x: args[i - 1], y: args[i], type: 'vertex' });
+        }
         return;
       }
       return _originalVertex.apply(this, args);
@@ -241,6 +255,11 @@
 
     p5.prototype.bezierVertex = function (...args) {
       if (_isLerpShapeMode) {
+        for (let i = 1; i < args.length; i += 2) {
+          _shapeCommands.push({ x: args[i - 1], y: args[i], type: 'bezier' });
+        }
+        return;
+
         // v2.0 仕様
         if (args.length === 2) {
           // もし、直前の頂点（始点）がまだプールにない場合、
@@ -263,7 +282,7 @@
             const [p1, p2, p3, p4] = _bezierChain;
 
             // 20分割などで細かく刻んで、通常の頂点として登録
-            const detail = 20;
+            const detail = _currentOptions.detail;
             for (let i = 1; i <= detail; i++) {
               let t = i / detail;
               let cx = p5.prototype.bezierPoint(p1.x, p2.x, p3.x, p4.x, t);
@@ -282,7 +301,7 @@
           const p1 = _shapeVertices[_shapeVertices.length - 1];
           const [x2, y2, x3, y3, x4, y4] = args;
 
-          const detail = 20;
+          const detail = _currentOptions.detail;
           for (let i = 1; i <= detail; i++) {
             let t = i / detail;
             let cx = p5.prototype.bezierPoint(p1.x, x2, x3, x4, t);
@@ -292,21 +311,149 @@
 
           _bezierChain = [];
         }
+      } else {
+        return _originalBezierVertex.apply(this, args);
       }
-      return _originalBezierVertex.apply(this, args);
+    };
+
+    p5.prototype.curveVertex = function (...args) {
+      if (_isLerpShapeMode) {
+        for (let i = 1; i < args.length; i += 2) {
+          _shapeCommands.push({ x: args[i - 1], y: args[i], type: 'curve' });
+        }
+        return;
+
+        if (_curveChain.length === 0) {
+          if (_shapeVertices.length > 0) {
+            _curveChain.push(_shapeVertices[_shapeVertices.length - 1]);
+            _shapeVertices.shift();
+          } else {
+            // _curveChain.push({ x: 0, y: 0 }); // フォールバック
+          }
+        }
+
+        _curveChain.push({ x: args[0], y: args[1] });
+
+        if (_curveChain.length === 4) {
+          const [p1, p2, p3, p4] = _curveChain;
+          const detail = _currentOptions.detail;
+          for (let i = 0; i <= detail; i++) {
+            let t = i / detail;
+            let cx = this.curvePoint(p1.x, p2.x, p3.x, p4.x, t);
+            let cy = this.curvePoint(p1.y, p2.y, p3.y, p4.y, t);
+            _shapeVertices.push({ x: cx, y: cy });
+          }
+
+          // 次の曲線へ数珠繋ぎにするため、
+          _curveChain = [p2, p3, p4];
+        }
+      } else {
+        return _originalCurveVertex.apply(this, args);
+      }
     };
 
     p5.prototype.endShape = function (...args) {
       if (_isLerpShapeMode) {
         _isLerpShapeMode = false;
-        if (args[0] === this.CLOSE) {
-          _shapeVertices.push(_shapeVertices[0]);
-        }
+
         const p = _calculateLocalProgress(
           _getValidatedProgress(_currentLerpProgress),
         );
         if (p <= 0) return;
         // if (p >= 1) return
+
+        // todo curve系のデバッグ
+        // if (args[0] === this.CLOSE) {
+        // _shapeVertices.push(_shapeVertices[0]);
+        // }
+
+        function getPoints(pts, type, detail) {
+          const ret = [];
+          for (let i = 0; i <= detail; i++) {
+            let t = i / detail;
+            switch (type) {
+              case 'curve':
+                ret.push({
+                  x: this.curvePoint(pts[0].x, pts[1].x, pts[2].x, pts[3].x, t),
+                  y: this.curvePoint(pts[0].y, pts[1].y, pts[2].y, pts[3].y, t),
+                });
+                break;
+              case 'bezier':
+                ret.push({
+                  x: this.bezierPoint(
+                    pts[0].x,
+                    pts[1].x,
+                    pts[2].x,
+                    pts[3].x,
+                    t,
+                  ),
+                  y: this.bezierPoint(
+                    pts[0].y,
+                    pts[1].y,
+                    pts[2].y,
+                    pts[3].y,
+                    t,
+                  ),
+                });
+                break;
+              case 'spline':
+                ret.push({
+                  x: this.splinePoint(
+                    pts[0].x,
+                    pts[1].x,
+                    pts[2].x,
+                    pts[3].x,
+                    t,
+                  ),
+                  y: this.splinePoint(
+                    pts[0].y,
+                    pts[1].y,
+                    pts[2].y,
+                    pts[3].y,
+                    t,
+                  ),
+                });
+                break;
+            }
+          }
+          return ret;
+        }
+
+        _shapeVertices = [];
+        const detail = _currentOptions.detail;
+        // 中に1つでもcurveがあれば、全部curveVertexに
+        // p5js ver1.x 系のみ
+        const hasCurve = _shapeCommands.some((cmd) => cmd.type === 'curve');
+        if (hasCurve) {
+          for (let i = 3; i < _shapeCommands.length; i++) {
+            const curvePts = getPoints(
+              _shapeCommands.slice(i - 3, i + 1),
+              'curve',
+              detail,
+            );
+            _shapeVertices.push(...curvePts);
+          }
+        } else {
+          //
+          _bezierChain = [];
+          for (let i = 0; i < _shapeCommands.length; i++) {
+            const cCmd = _shapeCommands[i];
+            if (cCmd.type == 'bezier' && i != 0) {
+              if (_bezierChain.length == 0) {
+                // 1つ前の座標を利用する
+                _bezierChain.push(_shapeCommands[i - 1]);
+              }
+              _bezierChain.push(cCmd);
+              if (_bezierChain.length >= 4) {
+                //
+                const bezierPts = getPoints(_bezierChain, 'bezier', detail);
+                _shapeVertices.push(...bezierPts);
+                _bezierChain = [];
+              }
+            }
+          }
+        }
+
         this.lerpVertices(_shapeVertices, p);
         return;
       }
@@ -616,8 +763,7 @@
       if (p >= 1)
         return _originalBezier.call(this, x1, y1, x2, y2, x3, y3, x4, y4);
 
-      // todo optionsの設定によって変化させたい
-      let detail = 20;
+      const detail = options.detail || _currentOptions.detail;
 
       // 点の配列を生成
       let vertices = [];
@@ -625,6 +771,37 @@
         let t = i / detail;
         let cx = this.bezierPoint(x1, x2, x3, x4, t);
         let cy = this.bezierPoint(y1, y2, y3, y4, t);
+        vertices.push({ x: cx, y: cy });
+      }
+
+      this.lerpVertices(vertices, p);
+    };
+
+    p5.prototype.lerpCurve = function (
+      x1,
+      y1,
+      x2,
+      y2,
+      x3,
+      y3,
+      x4,
+      y4,
+      progress,
+      options = {},
+    ) {
+      let p = _getValidatedProgress(progress);
+      if (p <= 0) return;
+      if (p >= 1)
+        return _originalCurve.call(this, x1, y1, x2, y2, x3, y3, x4, y4);
+
+      const detail = options.detail || _currentOptions.detail;
+
+      // 点の配列を生成
+      let vertices = [];
+      for (let i = 0; i <= detail; i++) {
+        let t = i / detail;
+        let cx = this.curvePoint(x1, x2, x3, x4, t);
+        let cy = this.curvePoint(y1, y2, y3, y4, t);
         vertices.push({ x: cx, y: cy });
       }
 
