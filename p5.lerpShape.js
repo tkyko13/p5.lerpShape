@@ -7,9 +7,6 @@
     // --- 内部状態の管理 ---
     let _currentLerpProgress = null;
     let _shapeCommands = [];
-    let _shapeVertices = [];
-    let _bezierChain = [];
-    let _curveChain = [];
     let _isLerpShapeMode = false;
     let _isInsideWithLerpShape = false;
     let _currentSteps = 0;
@@ -233,9 +230,6 @@
       if (_currentLerpProgress !== null) {
         _isLerpShapeMode = true;
         _shapeCommands = [];
-        _shapeVertices = [];
-        _bezierChain = [];
-        _curveChain = [];
         return;
       }
       return _originalBeginShape.apply(this, args);
@@ -258,59 +252,6 @@
         for (let i = 1; i < args.length; i += 2) {
           _shapeCommands.push({ x: args[i - 1], y: args[i], type: 'bezier' });
         }
-        return;
-
-        // v2.0 仕様
-        if (args.length === 2) {
-          // もし、直前の頂点（始点）がまだプールにない場合、
-          // 既存の _shapeVertices の最後の点を始点として最初に入れておく
-          if (_bezierChain.length === 0) {
-            if (_shapeVertices.length > 0) {
-              _bezierChain.push({
-                ..._shapeVertices[_shapeVertices.length - 1],
-              });
-            } else {
-              _bezierChain.push({ x: 0, y: 0 }); // フォールバック
-            }
-          }
-
-          // 今回の座標 (x, y) をプールに追加
-          _bezierChain.push({ x: args[0], y: args[1] });
-
-          // 「始点、制御点1、制御点2、終点」の4点が揃ったら、1本のベジェ曲線として処理！
-          if (_bezierChain.length === 4) {
-            const [p1, p2, p3, p4] = _bezierChain;
-
-            // 20分割などで細かく刻んで、通常の頂点として登録
-            const detail = _currentOptions.detail;
-            for (let i = 1; i <= detail; i++) {
-              let t = i / detail;
-              let cx = p5.prototype.bezierPoint(p1.x, p2.x, p3.x, p4.x, t);
-              let cy = p5.prototype.bezierPoint(p1.y, p2.y, p3.y, p4.y, t);
-              _shapeVertices.push({ x: cx, y: cy });
-            }
-
-            // 次の曲線へ数珠繋ぎにするため、
-            // 今回の「終点（p4）」だけを残してプールをリセットする
-            _bezierChain = [p4];
-          }
-        }
-        // v1.0仕様：引数が6つの場合（一発指定）
-        else if (args.length === 6) {
-          if (_shapeVertices.length === 0) _shapeVertices.push({ x: 0, y: 0 });
-          const p1 = _shapeVertices[_shapeVertices.length - 1];
-          const [x2, y2, x3, y3, x4, y4] = args;
-
-          const detail = _currentOptions.detail;
-          for (let i = 1; i <= detail; i++) {
-            let t = i / detail;
-            let cx = p5.prototype.bezierPoint(p1.x, x2, x3, x4, t);
-            let cy = p5.prototype.bezierPoint(p1.y, y2, y3, y4, t);
-            _shapeVertices.push({ x: cx, y: cy });
-          }
-
-          _bezierChain = [];
-        }
       } else {
         return _originalBezierVertex.apply(this, args);
       }
@@ -320,32 +261,6 @@
       if (_isLerpShapeMode) {
         for (let i = 1; i < args.length; i += 2) {
           _shapeCommands.push({ x: args[i - 1], y: args[i], type: 'curve' });
-        }
-        return;
-
-        if (_curveChain.length === 0) {
-          if (_shapeVertices.length > 0) {
-            _curveChain.push(_shapeVertices[_shapeVertices.length - 1]);
-            _shapeVertices.shift();
-          } else {
-            // _curveChain.push({ x: 0, y: 0 }); // フォールバック
-          }
-        }
-
-        _curveChain.push({ x: args[0], y: args[1] });
-
-        if (_curveChain.length === 4) {
-          const [p1, p2, p3, p4] = _curveChain;
-          const detail = _currentOptions.detail;
-          for (let i = 0; i <= detail; i++) {
-            let t = i / detail;
-            let cx = this.curvePoint(p1.x, p2.x, p3.x, p4.x, t);
-            let cy = this.curvePoint(p1.y, p2.y, p3.y, p4.y, t);
-            _shapeVertices.push({ x: cx, y: cy });
-          }
-
-          // 次の曲線へ数珠繋ぎにするため、
-          _curveChain = [p2, p3, p4];
         }
       } else {
         return _originalCurveVertex.apply(this, args);
@@ -361,11 +276,6 @@
         );
         if (p <= 0) return;
         // if (p >= 1) return
-
-        // todo curve系のデバッグ
-        // if (args[0] === this.CLOSE) {
-        // _shapeVertices.push(_shapeVertices[0]);
-        // }
 
         function getPoints(pts, type, detail) {
           const ret = [];
@@ -419,7 +329,7 @@
           return ret;
         }
 
-        _shapeVertices = [];
+        const _shapeVertices = [];
         const detail = _currentOptions.detail;
         // 中に1つでもcurveがあれば、全部curveVertexに
         // p5js ver1.x 系のみ
@@ -435,23 +345,42 @@
           }
         } else {
           //
-          _bezierChain = [];
+          let _bezierChain = [];
           for (let i = 0; i < _shapeCommands.length; i++) {
             const cCmd = _shapeCommands[i];
-            if (cCmd.type == 'bezier' && i != 0) {
-              if (_bezierChain.length == 0) {
-                // 1つ前の座標を利用する
-                _bezierChain.push(_shapeCommands[i - 1]);
+            if (cCmd.type === 'vertex') {
+              // 直線ポイントはそのまま頂点として即登録
+              _shapeVertices.push({ x: cCmd.x, y: cCmd.y });
+
+              // 次のベジェ曲線の始点としてバトンを渡すため、チェーンをリセットして自分を入れる
+              _bezierChain = [{ x: cCmd.x, y: cCmd.y }];
+            } else if (cCmd.type === 'bezier') {
+              // もし直前の vertex などからバトン（始点）が来ていなければフォールバック
+              if (_bezierChain.length === 0) {
+                if (_shapeVertices.length > 0) {
+                  _bezierChain.push({
+                    ..._shapeVertices[_shapeVertices.length - 1],
+                  });
+                }
               }
+
               _bezierChain.push(cCmd);
-              if (_bezierChain.length >= 4) {
-                //
+
+              // 4点（始点、制御1、制御2、終点）揃ったらベジェ曲線を細かく刻む！
+              if (_bezierChain.length === 4) {
                 const bezierPts = getPoints(_bezierChain, 'bezier', detail);
                 _shapeVertices.push(...bezierPts);
-                _bezierChain = [];
+
+                // 次のベジェが数数繋ぎ（2.0系仕様）になる場合に備え、今回の「終点」だけを残す
+                _bezierChain = [{ x: cCmd.x, y: cCmd.y }];
               }
             }
           }
+        }
+
+        // CLOSE（閉じられたパス）引数の処理
+        if (args[0] === this.CLOSE && _shapeVertices.length > 0) {
+          _shapeVertices.push({ ..._shapeVertices[0] });
         }
 
         this.lerpVertices(_shapeVertices, p);
